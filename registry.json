@@ -22,14 +22,14 @@
     "path": "games/drop-number/game.js"
   },
   {
-    "id": "echo-orchard",
-    "name": "Echo Orchard",
-    "description": "Every 4 moves becomes an echo gardener. Automate your own routes before the orchard rots.",
-    "icon": "🌿",
-    "color": "#112418",
-    "colorEnd": "#365314",
-    "accent": "#F59E0B",
-    "tags": ["strategy", "puzzle", "arcade"],
-    "path": "games/echo-orchard/game.js"
+    "id": "pulsepath",
+    "name": "Pulsepath",
+    "description": "Draw a live wire route, tag relays, and return to the core at the right moment to fire the board.",
+    "icon": "⚡",
+    "color": "#0A2024",
+    "colorEnd": "#155E75",
+    "accent": "#22D3EE",
+    "tags": ["strategy", "arcade", "tactics"],
+    "path": "games/pulsepath/game.js"
   }
 ]

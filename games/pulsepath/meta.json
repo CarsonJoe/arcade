@@ -1,0 +1,12 @@
+{
+  "id": "pulsepath",
+  "name": "Pulsepath",
+  "version": "1.0.0",
+  "description": "Draw a live wire route, tag relays, and return to the core at the right moment to fire the board.",
+  "author": "Arcade",
+  "icon": "⚡",
+  "color": "#0A2024",
+  "colorEnd": "#155E75",
+  "accent": "#22D3EE",
+  "tags": ["strategy", "arcade", "tactics"]
+}
