@@ -1,0 +1,12 @@
+{
+  "id": "brick-breaker",
+  "name": "Brick Breaker",
+  "version": "1.0.0",
+  "description": "Classic paddle-and-ball brick breaking with lives, levels, and a couple of simple drops.",
+  "author": "Arcade",
+  "icon": "🧱",
+  "color": "#09111E",
+  "colorEnd": "#1D4ED8",
+  "accent": "#F59E0B",
+  "tags": ["arcade", "classic", "action"]
+}

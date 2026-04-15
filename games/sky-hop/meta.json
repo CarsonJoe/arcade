@@ -1,0 +1,12 @@
+{
+  "id": "sky-hop",
+  "name": "Sky Hop",
+  "version": "1.0.0",
+  "description": "A doodle-jump-style endless hopper with moving ledges, springs, and crumble traps.",
+  "author": "Arcade",
+  "icon": "🪽",
+  "color": "#0B1326",
+  "colorEnd": "#1D4ED8",
+  "accent": "#22C55E",
+  "tags": ["arcade", "endless", "platformer"]
+}
