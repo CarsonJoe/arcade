@@ -1,8 +1,8 @@
 const COLS = 5;
-const ROWS = 8;
-const DANGER_ROW = 2;
-const SPAWN_ROW = 1;
-const STORAGE_KEY = 'v4state';
+const ROWS = 7;
+const DANGER_ROW = 1;
+const SPAWN_ROW = 0;
+const STORAGE_KEY = 'v5state';
 const BEST_KEY = 'best';
 const GRAVITY_MS = 190;
 const MERGE_TEASE_MS = 150;
@@ -46,7 +46,7 @@ function fmt(value) {
 }
 
 function mergeValue(base, count) {
-  return (base * base) * (2 ** Math.max(0, count - 2));
+  return base * (2 ** Math.max(0, count - 1));
 }
 
 let cssReady = false;
@@ -60,6 +60,7 @@ function injectCSS() {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 100%;
   color: #f8fafc;
   background:
@@ -204,10 +205,10 @@ function injectCSS() {
   z-index: 1;
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 8px max(10px, env(safe-area-inset-left, 0px))
-    calc(env(safe-area-inset-bottom, 0px) + 10px)
+  padding: 6px max(10px, env(safe-area-inset-left, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 4px)
     max(10px, env(safe-area-inset-right, 0px));
 }
 
@@ -1055,22 +1056,27 @@ const DropMerge = {
   },
 
   async _resolveFrom(anchorId, token) {
+    let priorityIds = new Set([anchorId]);
+
     while (token === this._runSeq) {
-      const moved = this._compactGrid();
-      if (moved) {
+      const movedIds = this._compactGrid();
+      if (movedIds.size) {
         this._syncTiles();
         const settled = await this._sleep(GRAVITY_MS, token);
         if (!settled) return false;
       }
 
-      const anchor = this._findTile(anchorId);
-      if (!anchor) return true;
+      const groups = this._collectMergeGroups(priorityIds, movedIds);
+      if (!groups.length) return true;
 
-      const cluster = this._collectCluster(anchor.row, anchor.col, anchor.tile.value);
-      if (cluster.length < 2) return true;
-
-      for (const part of cluster) {
-        this._pulseTile(part.tile.id, part.tile.id === anchorId ? 'anchor-merge' : 'merging', 180);
+      for (const group of groups) {
+        for (const part of group.parts) {
+          this._pulseTile(
+            part.tile.id,
+            part.tile.id === group.anchor.tile.id ? 'anchor-merge' : 'merging',
+            180,
+          );
+        }
       }
 
       try { navigator.vibrate?.([8, 24, 8]); } catch {}
@@ -1078,54 +1084,93 @@ const DropMerge = {
       if (!primed) return false;
 
       const removedIds = [];
-      for (const part of cluster) {
-        if (part.tile.id === anchorId) continue;
-        this._state.grid[part.row * COLS + part.col] = null;
-        removedIds.push(part.tile.id);
+      for (const group of groups) {
+        for (const part of group.parts) {
+          if (part.tile.id === group.anchor.tile.id) continue;
+          this._state.grid[part.row * COLS + part.col] = null;
+          removedIds.push(part.tile.id);
+        }
       }
 
-      anchor.tile.value = mergeValue(anchor.tile.value, cluster.length);
-      this._state.score += anchor.tile.value;
-      this._state.lastCol = anchor.col;
+      const nextPriorityIds = new Set();
+      for (const group of groups) {
+        group.anchor.tile.value = mergeValue(group.anchor.tile.value, group.parts.length);
+        this._state.score += group.anchor.tile.value;
+        if (group.anchor.tile.id === anchorId) this._state.lastCol = group.anchor.col;
+        nextPriorityIds.add(group.anchor.tile.id);
+      }
+
       this._updateHeader();
       this._syncTiles({ removingIds: removedIds });
-      this._pulseTile(anchorId, 'result-pop', MERGE_POP_MS);
-      this._spawnBurst(anchor.col, anchor.row, pal(anchor.tile.value).glow);
+      for (const group of groups) {
+        this._pulseTile(group.anchor.tile.id, 'result-pop', MERGE_POP_MS);
+        this._spawnBurst(group.anchor.col, group.anchor.row, pal(group.anchor.tile.value).glow);
+      }
 
       const popped = await this._sleep(MERGE_POP_MS, token);
       if (!popped) return false;
+      priorityIds = nextPriorityIds;
     }
 
     return false;
   },
 
   _compactGrid() {
-    let changed = false;
+    const movedIds = new Set();
 
     for (let col = 0; col < COLS; col++) {
       const stack = [];
       for (let row = ROWS - 1; row >= 0; row--) {
         const tile = this._state.grid[row * COLS + col];
-        if (tile) stack.push(tile);
+        if (tile) stack.push({ tile, row });
       }
 
       for (let row = ROWS - 1, index = 0; row >= 0; row--) {
-        const nextTile = index < stack.length ? stack[index++] : null;
+        const next = index < stack.length ? stack[index++] : null;
+        const nextTile = next?.tile ?? null;
         const cellIndex = row * COLS + col;
-        if (this._state.grid[cellIndex] !== nextTile) {
-          this._state.grid[cellIndex] = nextTile;
-          changed = true;
-        }
+        if (next && next.row !== row) movedIds.add(next.tile.id);
+        this._state.grid[cellIndex] = nextTile;
       }
     }
 
-    return changed;
+    return movedIds;
   },
 
-  _collectCluster(startRow, startCol, target) {
+  _collectMergeGroups(priorityIds, movedIds) {
+    const triggerIds = new Set([...priorityIds, ...movedIds]);
+    const seen = new Set();
+    const groups = [];
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const tile = this._state.grid[row * COLS + col];
+        if (!tile) continue;
+        const key = `${row},${col}`;
+        if (seen.has(key)) continue;
+
+        const parts = this._collectCluster(row, col, seen);
+        if (parts.length < 2) continue;
+        if (!parts.some(part => triggerIds.has(part.tile.id))) continue;
+
+        groups.push({
+          parts,
+          anchor: this._pickGroupAnchor(parts, priorityIds, movedIds),
+        });
+      }
+    }
+
+    return groups;
+  },
+
+  _collectCluster(startRow, startCol, seen = new Set()) {
+    const startTile = this._state.grid[startRow * COLS + startCol];
+    if (!startTile) return [];
+
     const queue = [[startRow, startCol]];
-    const seen = new Set([`${startRow},${startCol}`]);
+    seen.add(`${startRow},${startCol}`);
     const parts = [];
+    const target = startTile.value;
 
     while (queue.length) {
       const [row, col] = queue.shift();
@@ -1144,13 +1189,30 @@ const DropMerge = {
         if (nextRow < 0 || nextRow >= ROWS || nextCol < 0 || nextCol >= COLS) continue;
         const key = `${nextRow},${nextCol}`;
         if (seen.has(key)) continue;
-        seen.add(key);
         const nextTile = this._state.grid[nextRow * COLS + nextCol];
-        if (nextTile?.value === target) queue.push([nextRow, nextCol]);
+        if (nextTile?.value !== target) continue;
+        seen.add(key);
+        queue.push([nextRow, nextCol]);
       }
     }
 
     return parts;
+  },
+
+  _pickGroupAnchor(parts, priorityIds, movedIds) {
+    const priorityParts = parts.filter(part => priorityIds.has(part.tile.id));
+    const movedParts = parts.filter(part => movedIds.has(part.tile.id));
+    const source = priorityParts.length ? priorityParts : (movedParts.length ? movedParts : parts);
+    const preferredCol = this._state.lastCol;
+
+    return source.reduce((best, part) => {
+      if (!best) return part;
+      if (part.row !== best.row) return part.row > best.row ? part : best;
+      const partDistance = Math.abs(part.col - preferredCol);
+      const bestDistance = Math.abs(best.col - preferredCol);
+      if (partDistance !== bestDistance) return partDistance < bestDistance ? part : best;
+      return part.col > best.col ? part : best;
+    }, null);
   },
 
   _findTile(id) {
