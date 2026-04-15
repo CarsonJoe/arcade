@@ -1,11 +1,13 @@
 const COLS = 5;
 const ROWS = 8;
 const DANGER_ROW = 2;
+const SPAWN_ROW = 1;
 const STORAGE_KEY = 'v4state';
 const BEST_KEY = 'best';
 const GRAVITY_MS = 190;
 const MERGE_TEASE_MS = 150;
 const MERGE_POP_MS = 250;
+const FALL_ROW_MS = 900;
 
 const PALETTE = [
   { bg: 'linear-gradient(135deg,#155e75 0%,#0f766e 100%)', fg: '#ecfeff', glow: 'rgba(34,211,238,.24)' },
@@ -99,50 +101,43 @@ function injectCSS() {
   position: relative;
   z-index: 1;
   padding:
-    calc(env(safe-area-inset-top, 24px) + 14px)
-    max(18px, env(safe-area-inset-right, 0px))
-    8px
-    max(18px, env(safe-area-inset-left, 0px));
+    calc(env(safe-area-inset-top, 18px) + 8px)
+    max(14px, env(safe-area-inset-right, 0px))
+    6px
+    max(14px, env(safe-area-inset-left, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .dm-kicker {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: .18em;
   text-transform: uppercase;
   color: rgba(226,232,240,.58);
 }
 
-.dm-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 8px;
+.dm-head-stack {
+  min-width: 0;
 }
 
-.dm-title {
-  font-size: 33px;
-  line-height: .98;
+.dm-head-value {
+  margin-top: 4px;
+  font-size: 22px;
+  line-height: 1;
   letter-spacing: -.05em;
   font-weight: 900;
 }
 
-.dm-sub {
-  margin-top: 8px;
-  font-size: 14px;
-  line-height: 1.45;
-  color: rgba(226,232,240,.72);
-  max-width: 240px;
-}
-
 .dm-next-card {
-  min-width: 84px;
-  padding: 10px 10px 12px;
-  border-radius: 18px;
+  min-width: 74px;
+  padding: 8px 8px 10px;
+  border-radius: 16px;
   background: rgba(15,23,42,.68);
   border: 1px solid rgba(148,163,184,.18);
-  box-shadow: 0 18px 40px rgba(2,6,23,.28);
+  box-shadow: 0 14px 32px rgba(2,6,23,.24);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -173,16 +168,16 @@ function injectCSS() {
   z-index: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 10px max(18px, env(safe-area-inset-right, 0px)) 0 max(18px, env(safe-area-inset-left, 0px));
+  gap: 10px;
+  padding: 4px max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
 }
 
 .dm-stat {
-  padding: 12px 14px 14px;
-  border-radius: 18px;
+  padding: 10px 12px 12px;
+  border-radius: 16px;
   background: rgba(15,23,42,.56);
   border: 1px solid rgba(148,163,184,.14);
-  box-shadow: 0 12px 28px rgba(2,6,23,.22);
+  box-shadow: 0 10px 24px rgba(2,6,23,.20);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -196,27 +191,12 @@ function injectCSS() {
 }
 
 .dm-stat-val {
-  margin-top: 8px;
-  font-size: 28px;
+  margin-top: 6px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: -.06em;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-}
-
-.dm-tip {
-  position: relative;
-  z-index: 1;
-  margin: 14px 18px 0;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(8,15,28,.56);
-  border: 1px solid rgba(125,211,252,.14);
-  color: rgba(226,232,240,.78);
-  font-size: 13px;
-  text-align: center;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .dm-board-wrap {
@@ -226,9 +206,9 @@ function injectCSS() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px max(12px, env(safe-area-inset-left, 0px))
-    calc(env(safe-area-inset-bottom, 0px) + 18px)
-    max(12px, env(safe-area-inset-right, 0px));
+  padding: 8px max(10px, env(safe-area-inset-left, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 10px)
+    max(10px, env(safe-area-inset-right, 0px));
 }
 
 .dm-stage {
@@ -329,7 +309,7 @@ function injectCSS() {
 .dm-preview {
   z-index: 4;
   transition:
-    transform 120ms cubic-bezier(.22,.86,.34,1),
+    transform 80ms linear,
     opacity 120ms ease-out,
     filter 120ms ease-out;
 }
@@ -419,15 +399,8 @@ function injectCSS() {
   font-weight: 900;
 }
 
-.dm-over-copy {
-  margin-top: 10px;
-  color: rgba(226,232,240,.72);
-  line-height: 1.45;
-  font-size: 15px;
-}
-
 .dm-over-score {
-  margin-top: 18px;
+  margin-top: 14px;
   font-size: 15px;
   color: rgba(226,232,240,.84);
 }
@@ -517,6 +490,8 @@ const DropMerge = {
   _keyHandler: null,
   _resizeHandler: null,
   _resizeFrame: 0,
+  _fallFrame: 0,
+  _lastFallTs: 0,
   _runSeq: 0,
   _nextTileId: 1,
   _busy: false,
@@ -572,6 +547,7 @@ const DropMerge = {
     this._runSeq++;
     this._busy = false;
     this._clearTimers();
+    this._stopCurrentFall();
     cancelAnimationFrame(this._resizeFrame);
     document.removeEventListener('keydown', this._keyHandler);
     window.removeEventListener('resize', this._resizeHandler);
@@ -581,17 +557,20 @@ const DropMerge = {
   },
 
   pause() {
+    this._stopCurrentFall();
     this._saveStableSnapshot();
   },
 
-  resume() {},
+  resume() {
+    this._startCurrentFall();
+  },
 
   _fresh() {
     const center = Math.floor(COLS / 2);
     return {
       grid: new Array(ROWS * COLS).fill(null),
       score: 0,
-      current: { value: rand(), col: center },
+      current: { value: rand(), col: center, row: SPAWN_ROW },
       next: rand(),
       lastCol: center,
       status: 'playing',
@@ -613,8 +592,9 @@ const DropMerge = {
         ? {
             value: saved.current.value,
             col: clamp(Number(saved.current.col) || Math.floor(COLS / 2), 0, COLS - 1),
+            row: Number.isFinite(saved.current.row) ? saved.current.row : SPAWN_ROW,
           }
-        : { value: rand(), col: Math.floor(COLS / 2) },
+        : { value: rand(), col: Math.floor(COLS / 2), row: SPAWN_ROW },
       next: saved.next || rand(),
       lastCol: clamp(Number(saved.lastCol) || Math.floor(COLS / 2), 0, COLS - 1),
       status: saved.status === 'over' ? 'over' : 'playing',
@@ -626,7 +606,7 @@ const DropMerge = {
       grid: this._state.grid.map(tile => tile?.value ?? 0),
       score: this._state.score,
       current: this._state.current
-        ? { value: this._state.current.value, col: this._state.current.col }
+        ? { value: this._state.current.value, col: this._state.current.col, row: this._state.current.row }
         : null,
       next: this._state.next,
       lastCol: this._state.lastCol,
@@ -640,7 +620,7 @@ const DropMerge = {
   },
 
   _saveStableSnapshot() {
-    this._storage.set(STORAGE_KEY, this._stableSnapshot ?? this._serializeState());
+    this._storage.set(STORAGE_KEY, this._serializeState());
   },
 
   _normalizeCurrent() {
@@ -657,8 +637,15 @@ const DropMerge = {
       return;
     }
 
-    if (!this._state.current) this._state.current = { value: rand(), col: spawnCol };
+    if (!this._state.current) this._state.current = { value: rand(), col: spawnCol, row: SPAWN_ROW };
     this._state.current.col = spawnCol;
+    const landingRow = this._findLandingRow(spawnCol);
+    const startRow = landingRow === -1 ? 0 : Math.min(SPAWN_ROW, landingRow);
+    this._state.current.row = clamp(
+      Number.isFinite(this._state.current.row) ? this._state.current.row : startRow,
+      0,
+      Math.max(0, landingRow === -1 ? ROWS - 1 : landingRow),
+    );
   },
 
   _build() {
@@ -667,11 +654,12 @@ const DropMerge = {
     this._aiming = false;
     this._pointerId = null;
     this._clearTimers();
+    this._stopCurrentFall();
     this._tileEls = new Map();
     this._cellEls = [];
     this._layout = this._computeLayout();
 
-    const { cs, gap, gridW, gridH, previewOffset, stageH, fontSize } = this._layout;
+    const { cs, gap, gridW, gridH, stageH, fontSize } = this._layout;
     const best = this._storage.get(BEST_KEY) ?? 0;
 
     this._el.innerHTML = '';
@@ -679,17 +667,16 @@ const DropMerge = {
     const header = document.createElement('div');
     header.className = 'dm-hdr';
     header.innerHTML = `
-      <div class="dm-kicker">Drop & Merge</div>
-      <div class="dm-title-row">
-        <div>
-          <div class="dm-title">Hold, aim,<br>release.</div>
-          <div class="dm-sub">Drag your finger across the columns, then lift to fire the tile straight down.</div>
-        </div>
-        <div class="dm-next-card">
-          <div class="dm-next-lbl">Next</div>
-          <div class="dm-next-tile" id="dm-next-tile"></div>
-        </div>
+      <div class="dm-head-stack">
+        <div class="dm-kicker">Drop & Merge</div>
+        <div class="dm-head-value">Next</div>
       </div>`;
+    const nextCard = document.createElement('div');
+    nextCard.className = 'dm-next-card';
+    nextCard.innerHTML = `
+      <div class="dm-next-lbl">Up Next</div>
+      <div class="dm-next-tile" id="dm-next-tile"></div>`;
+    header.appendChild(nextCard);
     this._el.appendChild(header);
 
     const stats = document.createElement('div');
@@ -705,11 +692,6 @@ const DropMerge = {
       </div>`;
     this._el.appendChild(stats);
 
-    const tip = document.createElement('div');
-    tip.className = 'dm-tip';
-    tip.textContent = 'Merge clusters around the latest drop. Big groups square the number and scale it up.';
-    this._el.appendChild(tip);
-
     const wrap = document.createElement('div');
     wrap.className = 'dm-board-wrap';
 
@@ -721,7 +703,7 @@ const DropMerge = {
 
     const beam = document.createElement('div');
     beam.className = 'dm-col-beam';
-    beam.style.top = `${previewOffset}px`;
+    beam.style.top = '0px';
     beam.style.width = `${cs}px`;
     beam.style.height = `${gridH}px`;
     this._beamEl = beam;
@@ -729,7 +711,7 @@ const DropMerge = {
 
     const backdrop = document.createElement('div');
     backdrop.className = 'dm-grid-backdrop';
-    backdrop.style.top = `${previewOffset}px`;
+    backdrop.style.top = '0px';
     backdrop.style.width = `${gridW}px`;
     backdrop.style.height = `${gridH}px`;
     backdrop.style.gridTemplateColumns = `repeat(${COLS}, ${cs}px)`;
@@ -749,7 +731,7 @@ const DropMerge = {
 
     const tileLayer = document.createElement('div');
     tileLayer.className = 'dm-tile-layer';
-    tileLayer.style.top = `${previewOffset}px`;
+    tileLayer.style.top = '0px';
     tileLayer.style.width = `${gridW}px`;
     tileLayer.style.height = `${gridH}px`;
     this._tileLayer = tileLayer;
@@ -773,7 +755,7 @@ const DropMerge = {
 
     this._scoreEl = stats.querySelector('#dm-score');
     this._bestEl = stats.querySelector('#dm-best');
-    this._nextTileEl = header.querySelector('#dm-next-tile');
+    this._nextTileEl = nextCard.querySelector('#dm-next-tile');
 
     this._scoreEl.textContent = this._state.score;
     this._bestEl.textContent = best;
@@ -781,6 +763,7 @@ const DropMerge = {
     this._renderNext();
     this._syncTiles({ instant: true });
     this._updatePreview(true);
+    this._startCurrentFall();
 
     if (this._state.status === 'over') this._showOver();
   },
@@ -788,29 +771,28 @@ const DropMerge = {
   _computeLayout() {
     const gap = 8;
     const widthCap = Math.min(window.innerWidth, 460);
-    const horizontalPad = 34;
-    const headerFootprint = 244;
+    const horizontalPad = 28;
+    const headerFootprint = 154;
     const availableHeight = Math.max(360, window.innerHeight - headerFootprint);
     const cellByWidth = Math.floor((widthCap - horizontalPad - gap * (COLS - 1)) / COLS);
-    const cellByHeight = Math.floor((availableHeight - 92 - gap * (ROWS - 1)) / ROWS);
-    const cs = clamp(Math.min(cellByWidth, cellByHeight, 78), 44, 78);
-    const previewOffset = cs + 22;
+    const cellByHeight = Math.floor((availableHeight - gap * (ROWS - 1)) / ROWS);
+    const cs = clamp(Math.min(cellByWidth, cellByHeight, 76), 36, 76);
     const step = cs + gap;
     const gridW = COLS * cs + gap * (COLS - 1);
     const gridH = ROWS * cs + gap * (ROWS - 1);
-    const stageH = previewOffset + gridH;
+    const stageH = gridH;
     const fontSize = Math.max(14, Math.floor(cs * 0.33));
-    return { cs, gap, step, gridW, gridH, stageH, previewOffset, fontSize };
+    return { cs, gap, step, gridW, gridH, stageH, fontSize };
   },
 
   _renderNext() {
     if (!this._nextTileEl) return;
     const { cs } = this._layout;
     const tone = pal(this._state.next);
-    const size = Math.max(52, Math.floor(cs * 1.08));
+    const size = Math.max(42, Math.floor(cs * 0.92));
     this._nextTileEl.style.width = `${size}px`;
     this._nextTileEl.style.height = `${size}px`;
-    this._nextTileEl.style.fontSize = `${Math.max(14, Math.floor(size * 0.34))}px`;
+    this._nextTileEl.style.fontSize = `${Math.max(13, Math.floor(size * 0.34))}px`;
     this._nextTileEl.style.background = tone.bg;
     this._nextTileEl.style.color = tone.fg;
     this._nextTileEl.textContent = fmt(this._state.next);
@@ -829,6 +811,53 @@ const DropMerge = {
     }
 
     this._renderNext();
+  },
+
+  _startCurrentFall() {
+    this._stopCurrentFall();
+    if (this._busy || this._state?.status !== 'playing' || !this._state.current) return;
+    this._lastFallTs = 0;
+    this._fallFrame = requestAnimationFrame(ts => this._stepCurrentFall(ts));
+  },
+
+  _stopCurrentFall() {
+    if (this._fallFrame) cancelAnimationFrame(this._fallFrame);
+    this._fallFrame = 0;
+    this._lastFallTs = 0;
+  },
+
+  _stepCurrentFall(ts) {
+    if (this._busy || this._state?.status !== 'playing' || !this._state.current) {
+      this._fallFrame = 0;
+      return;
+    }
+
+    if (!this._lastFallTs) this._lastFallTs = ts;
+    const dt = ts - this._lastFallTs;
+    this._lastFallTs = ts;
+
+    const current = this._state.current;
+    const landingRow = this._findLandingRow(current.col);
+    if (landingRow !== -1) {
+      current.row = Math.min(landingRow, current.row + dt / FALL_ROW_MS);
+      if (current.row >= landingRow - 0.001) {
+        current.row = landingRow;
+        this._updatePreview();
+        this._landCurrent();
+        return;
+      }
+    }
+
+    this._updatePreview();
+    this._fallFrame = requestAnimationFrame(nextTs => this._stepCurrentFall(nextTs));
+  },
+
+  _clampCurrentRow() {
+    const current = this._state.current;
+    if (!current) return;
+    const landingRow = this._findLandingRow(current.col);
+    if (landingRow === -1) return;
+    current.row = clamp(current.row, 0, landingRow);
   },
 
   _onPointerDown(event) {
@@ -877,6 +906,7 @@ const DropMerge = {
     );
     if (this._state.current.col !== col) {
       this._state.current.col = col;
+      this._clampCurrentRow();
       try { navigator.vibrate?.(6); } catch {}
       this._updatePreview();
     }
@@ -887,6 +917,7 @@ const DropMerge = {
     const nextCol = clamp(this._state.current.col + delta, 0, COLS - 1);
     if (nextCol === this._state.current.col) return;
     this._state.current.col = nextCol;
+    this._clampCurrentRow();
     this._updatePreview();
     try { navigator.vibrate?.(6); } catch {}
   },
@@ -906,6 +937,7 @@ const DropMerge = {
     const tone = pal(current.value);
     const valid = this._findLandingRow(current.col) !== -1;
     const x = this._xForCol(current.col);
+    const y = this._yForRow(current.row);
 
     this._previewEl.style.transition = '';
     this._previewEl.classList.remove('hidden', 'shake');
@@ -913,9 +945,9 @@ const DropMerge = {
     this._previewEl.classList.toggle('invalid', !valid);
     this._previewEl.style.background = tone.bg;
     this._previewEl.style.color = tone.fg;
-    this._previewEl.style.transform = `translate(${x}px, 0px)`;
+    this._previewEl.style.transform = `translate(${x}px, ${y}px)`;
     this._previewEl.style.setProperty('--px', `${x}px`);
-    this._previewEl.style.setProperty('--py', '0px');
+    this._previewEl.style.setProperty('--py', `${y}px`);
     this._previewEl.textContent = fmt(current.value);
     this._previewEl.style.opacity = this._busy ? '0' : '';
 
@@ -934,7 +966,8 @@ const DropMerge = {
     if (this._busy || this._state.status !== 'playing' || !this._state.current) return;
 
     const token = this._runSeq;
-    const col = this._state.current.col;
+    const current = this._state.current;
+    const col = current.col;
     const row = this._findLandingRow(col);
     if (row === -1) {
       this._shakePreview();
@@ -944,11 +977,12 @@ const DropMerge = {
     this._busy = true;
     this._aiming = false;
     this._pointerId = null;
+    this._stopCurrentFall();
 
-    const dropValue = this._state.current.value;
+    const dropValue = current.value;
     const x = this._xForCol(col);
-    const y = this._layout.previewOffset + this._yForRow(row);
-    const duration = 170 + row * 55;
+    const y = this._yForRow(row);
+    const duration = Math.max(120, Math.round(Math.max(0.12, row - current.row) * 110));
 
     this._previewEl.classList.remove('aiming', 'invalid', 'hidden');
     this._previewEl.style.transition =
@@ -960,6 +994,25 @@ const DropMerge = {
 
     const landed = await this._sleep(duration + 24, token);
     if (!landed) return;
+    await this._finishCurrentLanding(dropValue, col, row, token);
+  },
+
+  _landCurrent() {
+    if (this._busy || this._state.status !== 'playing' || !this._state.current) return;
+    const current = this._state.current;
+    const row = this._findLandingRow(current.col);
+    if (row === -1) return;
+    current.row = row;
+    this._busy = true;
+    this._aiming = false;
+    this._pointerId = null;
+    this._stopCurrentFall();
+    this._updatePreview();
+    void this._finishCurrentLanding(current.value, current.col, row, this._runSeq);
+  },
+
+  async _finishCurrentLanding(dropValue, col, row, token) {
+    if (token !== this._runSeq) return false;
 
     const tile = { id: this._nextTileId++, value: dropValue };
     this._state.grid[row * COLS + col] = tile;
@@ -973,25 +1026,32 @@ const DropMerge = {
     try { navigator.vibrate?.(10); } catch {}
 
     const resolved = await this._resolveFrom(tile.id, token);
-    if (!resolved) return;
+    if (!resolved) return false;
 
     if (this._checkDanger()) {
       this._over();
-      return;
+      return true;
     }
 
     const spawnCol = this._pickSpawnColumn(this._state.lastCol);
     if (spawnCol == null) {
       this._over();
-      return;
+      return true;
     }
 
-    this._state.current = { value: this._state.next, col: spawnCol };
+    const spawnLandingRow = this._findLandingRow(spawnCol);
+    this._state.current = {
+      value: this._state.next,
+      col: spawnCol,
+      row: spawnLandingRow === -1 ? 0 : Math.min(SPAWN_ROW, spawnLandingRow),
+    };
     this._state.next = rand();
     this._busy = false;
     this._updateHeader();
     this._updatePreview(true);
     this._commitStableState();
+    this._startCurrentFall();
+    return true;
   },
 
   async _resolveFrom(anchorId, token) {
@@ -1238,9 +1298,10 @@ const DropMerge = {
   _shakePreview() {
     if (!this._previewEl) return;
     const x = this._xForCol(this._state.current?.col ?? 0);
+    const y = this._yForRow(this._state.current?.row ?? 0);
     this._previewEl.classList.remove('shake');
     this._previewEl.style.setProperty('--px', `${x}px`);
-    this._previewEl.style.setProperty('--py', '0px');
+    this._previewEl.style.setProperty('--py', `${y}px`);
     void this._previewEl.offsetWidth;
     this._previewEl.classList.add('shake');
     try { navigator.vibrate?.([8, 20, 8]); } catch {}
@@ -1260,11 +1321,12 @@ const DropMerge = {
   },
 
   _centerY(row) {
-    return this._layout.previewOffset + this._yForRow(row) + this._layout.cs / 2;
+    return this._yForRow(row) + this._layout.cs / 2;
   },
 
   _over() {
     if (this._state.status === 'over') return;
+    this._stopCurrentFall();
     this._busy = false;
     this._state.status = 'over';
     this._state.current = null;
@@ -1287,7 +1349,6 @@ const DropMerge = {
       <div class="dm-over-card">
         <div class="dm-over-emoji">💥</div>
         <div class="dm-over-title">Board Locked</div>
-        <div class="dm-over-copy">The stack reached the danger band. Reset and try to build a cleaner merge chain.</div>
         <div class="dm-over-score">Score: <strong>${this._state.score}</strong></div>
         <div class="dm-over-best">${this._newBestRun ? 'New best run.' : `Best: ${best}`}</div>
         <button class="dm-again">Play Again</button>
