@@ -1,0 +1,12 @@
+{
+  "id": "echo-orchard",
+  "name": "Echo Orchard",
+  "version": "1.0.0",
+  "description": "Every 4 moves becomes an echo gardener. Automate your own routes before the orchard rots.",
+  "author": "Arcade",
+  "icon": "🌿",
+  "color": "#112418",
+  "colorEnd": "#365314",
+  "accent": "#F59E0B",
+  "tags": ["strategy", "puzzle", "arcade"]
+}

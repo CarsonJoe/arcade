@@ -20,5 +20,16 @@
     "accent": "#F97316",
     "tags": ["puzzle", "arcade"],
     "path": "games/drop-number/game.js"
+  },
+  {
+    "id": "echo-orchard",
+    "name": "Echo Orchard",
+    "description": "Every 4 moves becomes an echo gardener. Automate your own routes before the orchard rots.",
+    "icon": "🌿",
+    "color": "#112418",
+    "colorEnd": "#365314",
+    "accent": "#F59E0B",
+    "tags": ["strategy", "puzzle", "arcade"],
+    "path": "games/echo-orchard/game.js"
   }
 ]
