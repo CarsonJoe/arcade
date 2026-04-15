@@ -1,0 +1,12 @@
+{
+  "id": "drop-number",
+  "name": "Drop & Merge",
+  "version": "1.0.0",
+  "description": "Drop numbered tiles into columns. Match values to merge them upward.",
+  "author": "Arcade",
+  "icon": "🔢",
+  "color": "#2A0D00",
+  "colorEnd": "#7C2D12",
+  "accent": "#F97316",
+  "tags": ["puzzle", "arcade"]
+}

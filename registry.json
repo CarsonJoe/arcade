@@ -1,0 +1,24 @@
+[
+  {
+    "id": "minesweeper",
+    "name": "Minesweeper",
+    "description": "Reveal the grid without detonating a mine. Long-press to flag.",
+    "icon": "💣",
+    "color": "#0D2137",
+    "colorEnd": "#0A3A6E",
+    "accent": "#0A84FF",
+    "tags": ["puzzle", "classic"],
+    "path": "games/minesweeper/game.js"
+  },
+  {
+    "id": "drop-number",
+    "name": "Drop & Merge",
+    "description": "Drop numbered tiles into columns. Match values to merge them upward.",
+    "icon": "🔢",
+    "color": "#2A0D00",
+    "colorEnd": "#7C2D12",
+    "accent": "#F97316",
+    "tags": ["puzzle", "arcade"],
+    "path": "games/drop-number/game.js"
+  }
+]

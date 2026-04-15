@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arcade">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>Arcade</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    :root {
+      --bg:       #000000;
+      --bg2:      #1C1C1E;
+      --bg3:      #2C2C2E;
+      --bg4:      #3A3A3C;
+      --accent:   #0A84FF;
+      --accent-s: rgba(10,132,255,.15);
+      --t1:       #FFFFFF;
+      --t2:       rgba(235,235,245,.6);
+      --t3:       rgba(235,235,245,.3);
+      --sep:      rgba(84,84,88,.65);
+      --success:  #30D158;
+      --danger:   #FF453A;
+      --safe-t:   env(safe-area-inset-top, 44px);
+      --safe-b:   env(safe-area-inset-bottom, 0px);
+      --safe-l:   env(safe-area-inset-left, 0px);
+      --safe-r:   env(safe-area-inset-right, 0px);
+      --tab-h:    calc(49px + env(safe-area-inset-bottom, 0px));
+    }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--t1);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased; user-select: none; }
+
+    /* ── App shell ── */
+    #app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+
+    .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .screen.active { display: flex; }
+
+    .scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain; }
+    .scroll-area::-webkit-scrollbar { display: none; }
+
+    /* ── Tab bar ── */
+    #tab-bar {
+      z-index: 100; display: flex; align-items: flex-start;
+      background: rgba(18,18,18,.85);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-top: .5px solid var(--sep);
+      padding-bottom: var(--safe-b);
+      height: var(--tab-h);
+      flex-shrink: 0;
+    }
+    .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 3px; padding: 8px 0; background: none; border: none;
+      cursor: pointer; color: var(--t3); transition: color .15s; }
+    .tab-btn.active { color: var(--accent); }
+    .tab-btn svg { width: 22px; height: 22px; }
+    .tab-btn span { font-size: 10px; font-weight: 500; letter-spacing: -.1px; }
+    .tab-btn:active { opacity: .7; }
+
+    /* ── Nav header ── */
+    .nav-header {
+      padding: calc(var(--safe-t) + 10px) max(20px, var(--safe-r)) 10px max(20px, var(--safe-l));
+      background: rgba(0,0,0,.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: .5px solid var(--sep);
+      flex-shrink: 0;
+    }
+    .large-title { font-size: 34px; font-weight: 700; letter-spacing: -.5px; line-height: 1.1; }
+
+    /* ── Sections ── */
+    .section { padding: 0 20px; margin-top: 28px; }
+    .section:first-child { margin-top: 22px; }
+    .section-title { font-size: 20px; font-weight: 700; letter-spacing: -.3px; margin-bottom: 14px; }
+
+    /* ── Horizontal scroll cards ── */
+    .h-scroll { display: flex; gap: 14px; overflow-x: auto; padding: 4px 20px 4px;
+      margin: 0 -20px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .h-scroll::-webkit-scrollbar { display: none; }
+
+    .game-card-lg {
+      flex-shrink: 0; width: 155px; height: 195px; border-radius: 20px;
+      overflow: hidden; position: relative; cursor: pointer;
+      transition: transform .12s, opacity .12s;
+    }
+    .game-card-lg:active { transform: scale(.95); opacity: .9; }
+    .game-card-lg .bg { position: absolute; inset: 0; }
+    .game-card-lg .icon { position: absolute; top: 22px; left: 18px; font-size: 50px; line-height: 1; }
+    .game-card-lg .info { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 14px 14px;
+      background: linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 100%); }
+    .game-card-lg .name { font-size: 14px; font-weight: 600; color: #fff; }
+    .game-card-lg .sub { font-size: 11px; color: rgba(255,255,255,.65); margin-top: 2px; }
+
+    /* ── Browse grid ── */
+    .games-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .game-card {
+      border-radius: 18px; overflow: hidden; position: relative; cursor: pointer;
+      background: var(--bg2); transition: transform .12s, opacity .12s; min-height: 168px;
+    }
+    .game-card:active { transform: scale(.95); opacity: .9; }
+    .game-card .card-top {
+      height: 96px; display: flex; align-items: center; justify-content: center;
+      font-size: 44px; position: relative;
+    }
+    .game-card .card-body { padding: 10px 13px 14px; }
+    .game-card .card-name { font-size: 14px; font-weight: 600; }
+    .game-card .card-desc { font-size: 11px; color: var(--t2); margin-top: 3px; line-height: 1.4; }
+    .game-card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+    .game-card .tag { background: var(--bg3); color: var(--t2); font-size: 10px;
+      padding: 2px 7px; border-radius: 10px; }
+
+    .fav-btn {
+      position: absolute; top: 8px; right: 8px;
+      background: rgba(0,0,0,.35); border: none; width: 30px; height: 30px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 15px; transition: transform .15s;
+    }
+    .fav-btn:active { transform: scale(.82); }
+
+    /* ── Empty state ── */
+    .empty { display: flex; flex-direction: column; align-items: center; padding: 28px 20px;
+      gap: 9px; color: var(--t2); }
+    .empty-icon { font-size: 38px; opacity: .45; }
+    .empty p { font-size: 14px; text-align: center; line-height: 1.5; }
+    .cta-btn { margin-top: 6px; background: var(--accent-s); color: var(--accent);
+      border: none; padding: 10px 22px; border-radius: 20px; font-size: 14px;
+      font-weight: 600; cursor: pointer; font-family: inherit; }
+    .cta-btn:active { opacity: .7; }
+
+    .pb-safe { height: max(20px, calc(var(--safe-b) + 10px)); }
+
+    /* ── Game overlay ── */
+    #game-overlay {
+      position: fixed; inset: 0; z-index: 1000; background: #000;
+      display: none; flex-direction: column;
+    }
+    #game-overlay.open { display: flex; }
+    #game-container { flex: 1; overflow: hidden; position: relative; }
+
+    /* ── Pause button ── */
+    #pause-btn {
+      position: fixed; top: calc(var(--safe-t) + 10px); right: max(14px, var(--safe-r));
+      z-index: 1010; width: 36px; height: 36px;
+      background: rgba(28,28,30,.82);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: .5px solid rgba(255,255,255,.14); border-radius: 50%;
+      display: none; align-items: center; justify-content: center; cursor: pointer;
+    }
+    #pause-btn.open { display: flex; }
+    #pause-btn svg { width: 15px; height: 15px; color: #fff; }
+    #pause-btn:active { opacity: .7; }
+
+    /* ── Pause menu ── */
+    #pause-menu {
+      position: fixed; inset: 0; z-index: 1020; display: none;
+      align-items: flex-end; justify-content: center;
+      padding-bottom: calc(var(--safe-b) + 16px);
+    }
+    #pause-menu.open { display: flex; }
+    .p-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .p-sheet {
+      position: relative; z-index: 1; background: var(--bg2); border-radius: 22px;
+      width: calc(100% - 40px); max-width: 380px; overflow: hidden;
+      animation: slideUp .22s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes slideUp { from { transform: translateY(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+    .p-title { text-align: center; font-size: 12px; font-weight: 600; letter-spacing: .6px;
+      color: var(--t2); padding: 14px; border-bottom: .5px solid var(--sep); }
+    .p-btn { width: 100%; padding: 16px; background: none; border: none; color: var(--t1);
+      font-size: 17px; font-family: inherit; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; gap: 10px; }
+    .p-btn:active { background: rgba(255,255,255,.09); }
+    .p-btn + .p-btn { border-top: .5px solid var(--sep); }
+    .p-btn.primary { color: var(--accent); font-weight: 600; }
+    .p-btn.danger { color: var(--danger); }
+
+    /* ── Loading ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 2000; background: var(--bg);
+      display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    }
+    #loading.open { display: flex; }
+    .spinner { width: 30px; height: 30px; border: 3px solid var(--bg3);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .75s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-lbl { font-size: 14px; color: var(--t2); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- Home -->
+  <div id="s-home" class="screen active">
+    <div class="nav-header"><div class="large-title">Arcade</div></div>
+    <div class="scroll-area">
+      <div class="section">
+        <div class="section-title">Favorites</div>
+        <div id="favs"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Recently Played</div>
+        <div id="recent"></div>
+      </div>
+      <div class="pb-safe"></div>
+    </div>
+  </div>
+
+  <!-- Browse -->
+  <div id="s-browse" class="screen">
+    <div class="nav-header"><div class="large-title">Browse</div></div>
+    <div class="scroll-area">
+      <div class="section">
+        <div class="games-grid" id="grid"></div>
+      </div>
+      <div class="pb-safe"></div>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div id="tab-bar">
+    <button class="tab-btn active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>
+        <path d="M9 21V12h6v9"/>
+      </svg>
+      <span>Home</span>
+    </button>
+    <button class="tab-btn" data-tab="browse">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+      </svg>
+      <span>Browse</span>
+    </button>
+  </div>
+</div>
+
+<!-- Game overlay -->
+<div id="game-overlay"><div id="game-container"></div></div>
+
+<!-- Pause button -->
+<button id="pause-btn" aria-label="Pause">
+  <svg viewBox="0 0 24 24" fill="currentColor">
+    <rect x="5" y="4" width="4" height="16" rx="1.5"/>
+    <rect x="15" y="4" width="4" height="16" rx="1.5"/>
+  </svg>
+</button>
+
+<!-- Pause menu -->
+<div id="pause-menu">
+  <div class="p-backdrop" id="p-backdrop"></div>
+  <div class="p-sheet">
+    <div class="p-title">PAUSED</div>
+    <button class="p-btn primary" id="btn-resume">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Resume
+    </button>
+    <button class="p-btn danger" id="btn-quit">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Quit Game
+    </button>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-lbl">Loading…</div>
+</div>
+
+<script type="module">
+// ── State ──────────────────────────────────────────────
+let registry = [];
+let favs    = new Set(JSON.parse(localStorage.getItem('app:favs')  || '[]'));
+let recents = JSON.parse(localStorage.getItem('app:recents') || '[]');
+let active  = null;   // { module, game }
+
+// ── DOM ────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const screens    = { home: $('s-home'), browse: $('s-browse') };
+const tabBtns    = document.querySelectorAll('.tab-btn');
+const gameOL     = $('game-overlay');
+const gameCont   = $('game-container');
+const pauseBtn   = $('pause-btn');
+const pauseMenu  = $('pause-menu');
+const loadingEl  = $('loading');
+
+// ── Boot ───────────────────────────────────────────────
+async function boot() {
+  try {
+    registry = await fetch('registry.json').then(r => r.json());
+  } catch { registry = []; }
+  renderHome();
+  renderBrowse();
+  bindTabs();
+  bindPause();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ── Tabs ───────────────────────────────────────────────
+function bindTabs() {
+  tabBtns.forEach(btn => btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    tabBtns.forEach(b => b.classList.toggle('active', b === btn));
+    Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === tab));
+  }));
+}
+
+function goTo(tab) {
+  tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === tab));
+}
+
+// ── Home ───────────────────────────────────────────────
+function renderHome() {
+  renderFavs();
+  renderRecent();
+}
+
+function renderFavs() {
+  const el = $('favs');
+  const games = registry.filter(g => favs.has(g.id));
+  if (!games.length) {
+    el.innerHTML = `<div class="empty">
+      <div class="empty-icon">⭐</div>
+      <p>No favorites yet.<br>Browse games to add some!</p>
+      <button class="cta-btn" onclick="document.querySelector('[data-tab=browse]').click()">Browse Games</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'h-scroll';
+  games.forEach(g => row.appendChild(makeLargeCard(g)));
+  el.appendChild(row);
+}
+
+function renderRecent() {
+  const el = $('recent');
+  const games = recents.map(id => registry.find(g => g.id === id)).filter(Boolean).slice(0, 8);
+  if (!games.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🎮</div><p>Play a game to see it here</p></div>`;
+    return;
+  }
+  el.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'h-scroll';
+  games.forEach(g => row.appendChild(makeLargeCard(g)));
+  el.appendChild(row);
+}
+
+function makeLargeCard(g) {
+  const d = document.createElement('div');
+  d.className = 'game-card-lg';
+  d.innerHTML = `
+    <div class="bg" style="background:linear-gradient(145deg,${g.color},${g.colorEnd})"></div>
+    <div class="icon">${g.icon}</div>
+    <div class="info">
+      <div class="name">${g.name}</div>
+      <div class="sub">${g.tags.join(' · ')}</div>
+    </div>`;
+  d.addEventListener('click', () => launch(g));
+  return d;
+}
+
+// ── Browse ─────────────────────────────────────────────
+function renderBrowse() {
+  const grid = $('grid');
+  grid.innerHTML = '';
+  registry.forEach(g => grid.appendChild(makeGridCard(g)));
+}
+
+function makeGridCard(g) {
+  const d = document.createElement('div');
+  d.className = 'game-card';
+  const starred = favs.has(g.id);
+  d.innerHTML = `
+    <div class="card-top" style="background:linear-gradient(145deg,${g.color},${g.colorEnd})">
+      <span>${g.icon}</span>
+      <button class="fav-btn">${starred ? '⭐' : '✩'}</button>
+    </div>
+    <div class="card-body">
+      <div class="card-name">${g.name}</div>
+      <div class="card-desc">${g.description}</div>
+      <div class="tags">${g.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+    </div>`;
+  d.querySelector('.fav-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    toggleFav(g.id);
+    renderBrowse();
+    renderHome();
+    vibrate(10);
+  });
+  d.addEventListener('click', e => { if (!e.target.closest('.fav-btn')) launch(g); });
+  return d;
+}
+
+function toggleFav(id) {
+  favs.has(id) ? favs.delete(id) : favs.add(id);
+  localStorage.setItem('app:favs', JSON.stringify([...favs]));
+}
+
+// ── Game launch ────────────────────────────────────────
+async function launch(game) {
+  loadingEl.classList.add('open');
+  vibrate(8);
+  try {
+    const mod = await import(`./${game.path}`);
+    const gm  = mod.default;
+
+    recents = [game.id, ...recents.filter(id => id !== game.id)].slice(0, 10);
+    localStorage.setItem('app:recents', JSON.stringify(recents));
+
+    gameCont.innerHTML = '';
+    gameOL.classList.add('open');
+    pauseBtn.classList.add('open');
+    loadingEl.classList.remove('open');
+
+    const storage = makeStorage(game.id);
+    await gm.init(gameCont, storage, { onPause: openPause });
+    active = { module: gm, game };
+  } catch (err) {
+    console.error(err);
+    loadingEl.classList.remove('open');
+    alert('Failed to load game.');
+  }
+}
+
+async function quitGame() {
+  if (active) {
+    try { await active.module.destroy(); } catch {}
+    active = null;
+  }
+  closePause();
+  gameOL.classList.remove('open');
+  pauseBtn.classList.remove('open');
+  gameCont.innerHTML = '';
+  renderHome();
+}
+
+// ── Pause ──────────────────────────────────────────────
+function bindPause() {
+  pauseBtn.addEventListener('click', openPause);
+  $('btn-resume').addEventListener('click', closePause);
+  $('btn-quit').addEventListener('click', quitGame);
+  $('p-backdrop').addEventListener('click', closePause);
+}
+
+function openPause() {
+  if (!active) return;
+  pauseMenu.classList.add('open');
+  try { active.module.pause(); } catch {}
+  vibrate(10);
+}
+
+function closePause() {
+  pauseMenu.classList.remove('open');
+  try { active.module.resume(); } catch {}
+}
+
+// ── Scoped storage proxy ───────────────────────────────
+function makeStorage(id) {
+  const p = `gs:${id}:`;
+  return {
+    get:    k => { try { return JSON.parse(localStorage.getItem(p + k)); } catch { return null; } },
+    set:    (k, v) => localStorage.setItem(p + k, JSON.stringify(v)),
+    remove: k => localStorage.removeItem(p + k),
+    clear:  () => Object.keys(localStorage).filter(k => k.startsWith(p))
+                    .forEach(k => localStorage.removeItem(k)),
+  };
+}
+
+// ── Utils ──────────────────────────────────────────────
+function vibrate(ms) { try { navigator.vibrate?.(ms); } catch {} }
+
+boot();
+</script>
+</body>
+</html>

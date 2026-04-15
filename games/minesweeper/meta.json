@@ -1,0 +1,12 @@
+{
+  "id": "minesweeper",
+  "name": "Minesweeper",
+  "version": "1.0.0",
+  "description": "Reveal the grid without detonating a mine. Long-press to flag.",
+  "author": "Arcade",
+  "icon": "💣",
+  "color": "#0D2137",
+  "colorEnd": "#0A3A6E",
+  "accent": "#0A84FF",
+  "tags": ["puzzle", "classic"]
+}
