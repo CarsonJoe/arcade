@@ -5,6 +5,9 @@ const PLAYER_H = 34;
 const GRAVITY = 1450;
 const JUMP_VELOCITY = -560;
 const SPRING_VELOCITY = -760;
+const TILT_MAX_ANGLE = 26;
+const TILT_DEADZONE = 3;
+const TILT_RESPONSE = 7.5;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -18,6 +21,33 @@ function fmt(value) {
   if (value >= 1000000) return `${Math.round(value / 100000) / 10}m`;
   if (value >= 10000) return `${Math.round(value / 1000)}k`;
   return String(value);
+}
+
+function orientationAngle() {
+  if (typeof screen !== 'undefined' && typeof screen.orientation?.angle === 'number') {
+    return screen.orientation.angle;
+  }
+  if (typeof window !== 'undefined' && typeof window.orientation === 'number') {
+    return window.orientation;
+  }
+  return 0;
+}
+
+function tiltAxis(event) {
+  let axis = typeof event.gamma === 'number' ? event.gamma : 0;
+  const angle = orientationAngle();
+
+  if (Math.abs(angle) === 90 && typeof event.beta === 'number') {
+    axis = angle > 0 ? -event.beta : event.beta;
+  } else if (Math.abs(angle) === 180) {
+    axis *= -1;
+  }
+
+  const magnitude = Math.abs(axis);
+  if (magnitude <= TILT_DEADZONE) return 0;
+
+  const normalized = (magnitude - TILT_DEADZONE) / (TILT_MAX_ANGLE - TILT_DEADZONE);
+  return clamp(Math.sign(axis) * normalized, -1, 1);
 }
 
 let cssReady = false;
@@ -256,6 +286,23 @@ function injectCSS() {
     0 10px 18px rgba(2,6,23,.18);
 }
 
+.sh-ctrl[data-role="tilt"] {
+  min-width: 72px;
+  font-size: 15px;
+  letter-spacing: .02em;
+}
+
+.sh-ctrl.active {
+  color: #052E16;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.04)),
+    linear-gradient(180deg, #86EFAC 0%, #22C55E 100%);
+}
+
+.sh-ctrl:disabled {
+  opacity: .48;
+}
+
 @media (max-height: 780px) {
   .sh-title { font-size: 22px; }
   .sh-stats { gap: 6px; }
@@ -331,7 +378,7 @@ function freshState(best) {
     highestY: startPlatform.y - 18,
     topSpawnY: startPlatform.y,
     platforms: [startPlatform],
-    message: 'Hold left or right. Jump happens automatically on safe landings.',
+    message: 'Tilt your phone or hold left and right. Jump happens automatically on safe landings.',
   };
 }
 
@@ -346,13 +393,20 @@ const SkyHop = {
   _statusEl: null,
   _stats: null,
   _startBtn: null,
+  _tiltBtn: null,
   _raf: 0,
   _lastTs: 0,
   _keys: { left: false, right: false },
   _stars: [],
+  _tiltSupported: false,
+  _tiltEnabled: false,
+  _tiltPermission: 'unavailable',
+  _tiltTarget: 0,
+  _tiltValue: 0,
   _onResize: null,
   _onKeyDown: null,
   _onKeyUp: null,
+  _onDeviceOrientation: null,
 
   async init(container, storage) {
     injectCSS();
@@ -360,6 +414,13 @@ const SkyHop = {
     this._best = Number(storage.get('best') || 0);
     this._state = freshState(this._best);
     this._stars = makeStars();
+    this._tiltSupported = typeof window.DeviceOrientationEvent !== 'undefined';
+    this._tiltPermission = this._tiltSupported
+      ? typeof window.DeviceOrientationEvent.requestPermission === 'function' ? 'prompt' : 'granted'
+      : 'unavailable';
+    this._tiltEnabled = false;
+    this._tiltTarget = 0;
+    this._tiltValue = 0;
 
     this._el = document.createElement('div');
     this._el.className = 'sh';
@@ -386,6 +447,7 @@ const SkyHop = {
       <div class="sh-foot">
         <div class="sh-status"></div>
         <div class="sh-controls">
+          <button class="sh-ctrl" data-role="tilt">Tilt</button>
           <button class="sh-ctrl" data-dir="left">◀</button>
           <button class="sh-ctrl" data-dir="right">▶</button>
         </div>
@@ -397,6 +459,7 @@ const SkyHop = {
     this._overlay = this._el.querySelector('.sh-overlay');
     this._statusEl = this._el.querySelector('.sh-status');
     this._startBtn = this._el.querySelector('[data-action="start"]');
+    this._tiltBtn = this._el.querySelector('[data-role="tilt"]');
     this._stats = {
       score: this._el.querySelector('[data-stat="score"]'),
       best: this._el.querySelector('[data-stat="best"]'),
@@ -404,6 +467,7 @@ const SkyHop = {
     };
 
     this._bindEvents();
+    this._syncTiltButton();
     this._resizeCanvas();
     this._showMenu();
     this._draw();
@@ -414,6 +478,7 @@ const SkyHop = {
     if (this._onResize) window.removeEventListener('resize', this._onResize);
     if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown);
     if (this._onKeyUp) window.removeEventListener('keyup', this._onKeyUp);
+    this._detachTilt();
     this._el?.remove();
     this._el = null;
   },
@@ -428,6 +493,7 @@ const SkyHop = {
 
   _bindEvents() {
     this._startBtn.addEventListener('click', () => this._startRun());
+    this._tiltBtn.addEventListener('click', () => this._toggleTilt());
 
     const setHold = (dir, on) => {
       this._keys[dir] = on;
@@ -495,6 +561,88 @@ const SkyHop = {
     this._draw();
   },
 
+  _syncTiltButton() {
+    if (!this._tiltBtn) return;
+
+    this._tiltBtn.classList.toggle('active', this._tiltEnabled);
+
+    if (!this._tiltSupported) {
+      this._tiltBtn.disabled = true;
+      this._tiltBtn.textContent = 'No Tilt';
+      return;
+    }
+
+    this._tiltBtn.disabled = false;
+    this._tiltBtn.textContent = this._tiltEnabled ? 'Tilt On' : 'Tilt';
+  },
+
+  _detachTilt() {
+    if (this._onDeviceOrientation) {
+      window.removeEventListener('deviceorientation', this._onDeviceOrientation);
+    }
+    this._tiltEnabled = false;
+    this._tiltTarget = 0;
+    this._tiltValue = 0;
+    this._syncTiltButton();
+  },
+
+  async _toggleTilt() {
+    if (this._tiltEnabled) {
+      this._detachTilt();
+      this._state.message = 'Tilt disabled. Buttons and keys still work.';
+      this._updateHud();
+      return;
+    }
+
+    if (!this._tiltSupported) {
+      this._state.message = 'Tilt is not available on this device.';
+      this._updateHud();
+      return;
+    }
+
+    try {
+      if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+        const result = await window.DeviceOrientationEvent.requestPermission();
+        if (result !== 'granted') {
+          this._tiltPermission = 'blocked';
+          this._state.message = 'Tilt permission was blocked. Use touch or keyboard controls.';
+          this._syncTiltButton();
+          this._updateHud();
+          return;
+        }
+      }
+
+      this._tiltPermission = 'granted';
+      this._detachTilt();
+      this._onDeviceOrientation = event => {
+        this._tiltTarget = tiltAxis(event);
+      };
+      window.addEventListener('deviceorientation', this._onDeviceOrientation);
+      this._tiltEnabled = true;
+      this._state.message = 'Tilt enabled. Lean left or right to steer.';
+      this._syncTiltButton();
+      this._updateHud();
+    } catch (error) {
+      this._tiltPermission = 'blocked';
+      this._state.message = 'Tilt could not start here. Use touch or keyboard controls.';
+      this._syncTiltButton();
+      this._updateHud();
+    }
+  },
+
+  _inputAxis(dt) {
+    const digital = (this._keys.right ? 1 : 0) - (this._keys.left ? 1 : 0);
+
+    if (!this._tiltEnabled) return digital;
+
+    const easing = clamp(dt * TILT_RESPONSE, 0, 1);
+    this._tiltValue += (this._tiltTarget - this._tiltValue) * easing;
+
+    if (digital) return digital;
+    if (Math.abs(this._tiltValue) < 0.035) return 0;
+    return this._tiltValue;
+  },
+
   _showMenu() {
     this._state.status = 'menu';
     this._overlay.classList.add('show');
@@ -505,6 +653,7 @@ const SkyHop = {
         <div class="sh-overlay-copy">
           Ride normal ledges, chase springs for huge boosts, and watch for crumble platforms.
           Wraparound movement stays on, so use the screen edges to save bad routes.
+          On phones, tap Tilt for accelerometer steering.
         </div>
         <button class="sh-overlay-btn" data-action="start">Play</button>
       </div>`;
@@ -549,11 +698,11 @@ const SkyHop = {
   _update(dt) {
     const state = this._state;
     const player = state.player;
-    const input = (this._keys.right ? 1 : 0) - (this._keys.left ? 1 : 0);
+    const input = this._inputAxis(dt);
 
-    if (input) {
+    if (Math.abs(input) > 0.001) {
       player.vx = input * 220;
-      player.dir = input;
+      player.dir = Math.sign(input) || player.dir;
     } else {
       player.vx *= 0.88;
       if (Math.abs(player.vx) < 5) player.vx = 0;
