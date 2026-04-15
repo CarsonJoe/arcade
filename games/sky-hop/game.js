@@ -8,6 +8,8 @@ const SPRING_VELOCITY = -760;
 const TILT_MAX_ANGLE = 26;
 const TILT_DEADZONE = 3;
 const TILT_RESPONSE = 7.5;
+const TILT_MOTION_GRAVITY = 4.8;
+const TILT_SENSOR_TIMEOUT_MS = 1400;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -48,6 +50,22 @@ function tiltAxis(event) {
 
   const normalized = (magnitude - TILT_DEADZONE) / (TILT_MAX_ANGLE - TILT_DEADZONE);
   return clamp(Math.sign(axis) * normalized, -1, 1);
+}
+
+function motionAxis(event) {
+  const gravity = event.accelerationIncludingGravity;
+  if (!gravity) return null;
+
+  let axis = typeof gravity.x === 'number' ? gravity.x : 0;
+  const angle = orientationAngle();
+
+  if (Math.abs(angle) === 90 && typeof gravity.y === 'number') {
+    axis = angle > 0 ? -gravity.y : gravity.y;
+  } else if (Math.abs(angle) === 180) {
+    axis *= -1;
+  }
+
+  return clamp(axis / TILT_MOTION_GRAVITY, -1, 1);
 }
 
 let cssReady = false;
@@ -403,10 +421,13 @@ const SkyHop = {
   _tiltPermission: 'unavailable',
   _tiltTarget: 0,
   _tiltValue: 0,
+  _tiltLastSensorTs: 0,
+  _tiltHintTimer: 0,
   _onResize: null,
   _onKeyDown: null,
   _onKeyUp: null,
   _onDeviceOrientation: null,
+  _onDeviceMotion: null,
 
   async init(container, storage) {
     injectCSS();
@@ -421,6 +442,7 @@ const SkyHop = {
     this._tiltEnabled = false;
     this._tiltTarget = 0;
     this._tiltValue = 0;
+    this._tiltLastSensorTs = 0;
 
     this._el = document.createElement('div');
     this._el.className = 'sh';
@@ -499,7 +521,7 @@ const SkyHop = {
       this._keys[dir] = on;
     };
 
-    this._el.querySelectorAll('.sh-ctrl').forEach(button => {
+    this._el.querySelectorAll('.sh-ctrl[data-dir]').forEach(button => {
       const dir = button.dataset.dir;
       button.addEventListener('pointerdown', () => setHold(dir, true));
       button.addEventListener('pointerup', () => setHold(dir, false));
@@ -577,12 +599,22 @@ const SkyHop = {
   },
 
   _detachTilt() {
+    if (this._tiltHintTimer) {
+      clearTimeout(this._tiltHintTimer);
+      this._tiltHintTimer = 0;
+    }
     if (this._onDeviceOrientation) {
       window.removeEventListener('deviceorientation', this._onDeviceOrientation);
+    }
+    if (this._onDeviceMotion) {
+      window.removeEventListener('devicemotion', this._onDeviceMotion);
     }
     this._tiltEnabled = false;
     this._tiltTarget = 0;
     this._tiltValue = 0;
+    this._tiltLastSensorTs = 0;
+    this._onDeviceOrientation = null;
+    this._onDeviceMotion = null;
     this._syncTiltButton();
   },
 
@@ -601,9 +633,17 @@ const SkyHop = {
     }
 
     try {
+      const permissionRequests = [];
       if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
-        const result = await window.DeviceOrientationEvent.requestPermission();
-        if (result !== 'granted') {
+        permissionRequests.push(window.DeviceOrientationEvent.requestPermission());
+      }
+      if (typeof window.DeviceMotionEvent !== 'undefined' && typeof window.DeviceMotionEvent.requestPermission === 'function') {
+        permissionRequests.push(window.DeviceMotionEvent.requestPermission());
+      }
+
+      if (permissionRequests.length) {
+        const results = await Promise.all(permissionRequests);
+        if (results.some(result => result !== 'granted')) {
           this._tiltPermission = 'blocked';
           this._state.message = 'Tilt permission was blocked. Use touch or keyboard controls.';
           this._syncTiltButton();
@@ -616,9 +656,22 @@ const SkyHop = {
       this._detachTilt();
       this._onDeviceOrientation = event => {
         this._tiltTarget = tiltAxis(event);
+        this._tiltLastSensorTs = performance.now();
+      };
+      this._onDeviceMotion = event => {
+        const axis = motionAxis(event);
+        if (axis === null) return;
+        this._tiltTarget = axis;
+        this._tiltLastSensorTs = performance.now();
       };
       window.addEventListener('deviceorientation', this._onDeviceOrientation);
+      window.addEventListener('devicemotion', this._onDeviceMotion);
       this._tiltEnabled = true;
+      this._tiltHintTimer = window.setTimeout(() => {
+        if (!this._tiltEnabled || this._tiltLastSensorTs) return;
+        this._state.message = 'Tilt is on, but Safari is not sending motion data. Check iPhone Settings > Safari > Motion & Orientation Access, then reload.';
+        this._updateHud();
+      }, TILT_SENSOR_TIMEOUT_MS);
       this._state.message = 'Tilt enabled. Lean left or right to steer.';
       this._syncTiltButton();
       this._updateHud();
@@ -653,7 +706,7 @@ const SkyHop = {
         <div class="sh-overlay-copy">
           Ride normal ledges, chase springs for huge boosts, and watch for crumble platforms.
           Wraparound movement stays on, so use the screen edges to save bad routes.
-          On phones, tap Tilt for accelerometer steering.
+          On phones, tap Tilt for accelerometer steering. If nothing moves on iPhone, enable Motion & Orientation Access in Safari settings.
         </div>
         <button class="sh-overlay-btn" data-action="start">Play</button>
       </div>`;
