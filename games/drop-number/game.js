@@ -31,12 +31,25 @@ function pal(value) {
   return PALETTE[Math.min(index, PALETTE.length - 1)];
 }
 
-function rand() {
-  const roll = Math.random();
-  if (roll < 0.52) return 2;
-  if (roll < 0.82) return 4;
-  if (roll < 0.95) return 8;
-  return 16;
+function rand(maxValue = 4) {
+  const cap = Math.max(2, maxValue);
+  const options = [];
+  const weights = [];
+
+  for (let value = 2, tier = 0; value <= cap; value *= 2, tier++) {
+    options.push(value);
+    weights.push(Math.pow(0.56, tier));
+  }
+
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let roll = Math.random() * total;
+
+  for (let i = 0; i < options.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return options[i];
+  }
+
+  return options[options.length - 1];
 }
 
 function fmt(value) {
@@ -498,6 +511,7 @@ const DropMerge = {
   _busy: false,
   _aiming: false,
   _pointerId: null,
+  _heldCol: Math.floor(COLS / 2),
   _timeouts: null,
   _newBestRun: false,
 
@@ -507,6 +521,7 @@ const DropMerge = {
     this._tileEls = new Map();
     this._cellEls = [];
     this._timeouts = new Set();
+    this._heldCol = Math.floor(COLS / 2);
     this._newBestRun = false;
     this._state = this._loadState() ?? this._fresh();
     this._normalizeCurrent();
@@ -571,8 +586,8 @@ const DropMerge = {
     return {
       grid: new Array(ROWS * COLS).fill(null),
       score: 0,
-      current: { value: rand(), col: center, row: SPAWN_ROW },
-      next: rand(),
+      current: { value: rand(4), col: center, row: SPAWN_ROW },
+      next: rand(4),
       lastCol: center,
       status: 'playing',
     };
@@ -595,8 +610,8 @@ const DropMerge = {
             col: clamp(Number(saved.current.col) || Math.floor(COLS / 2), 0, COLS - 1),
             row: Number.isFinite(saved.current.row) ? saved.current.row : SPAWN_ROW,
           }
-        : { value: rand(), col: Math.floor(COLS / 2), row: SPAWN_ROW },
-      next: saved.next || rand(),
+        : { value: rand(4), col: Math.floor(COLS / 2), row: SPAWN_ROW },
+      next: saved.next || rand(4),
       lastCol: clamp(Number(saved.lastCol) || Math.floor(COLS / 2), 0, COLS - 1),
       status: saved.status === 'over' ? 'over' : 'playing',
     };
@@ -630,7 +645,9 @@ const DropMerge = {
       return;
     }
 
-    const preferred = this._state.current?.col ?? this._state.lastCol ?? Math.floor(COLS / 2);
+    const preferred = this._pointerId !== null
+      ? this._heldCol
+      : (this._state.current?.col ?? this._state.lastCol ?? Math.floor(COLS / 2));
     const spawnCol = this._pickSpawnColumn(preferred);
     if (spawnCol == null) {
       this._state.status = 'over';
@@ -638,8 +655,9 @@ const DropMerge = {
       return;
     }
 
-    if (!this._state.current) this._state.current = { value: rand(), col: spawnCol, row: SPAWN_ROW };
+    if (!this._state.current) this._state.current = { value: rand(4), col: spawnCol, row: SPAWN_ROW };
     this._state.current.col = spawnCol;
+    this._heldCol = spawnCol;
     const landingRow = this._findLandingRow(spawnCol);
     const startRow = landingRow === -1 ? 0 : Math.min(SPAWN_ROW, landingRow);
     this._state.current.row = clamp(
@@ -814,6 +832,26 @@ const DropMerge = {
     this._renderNext();
   },
 
+  _highestBoardValue() {
+    let highest = 2;
+
+    for (const tile of this._state.grid) {
+      if (tile?.value) highest = Math.max(highest, tile.value);
+    }
+
+    if (this._state.current?.value) highest = Math.max(highest, this._state.current.value);
+    return highest;
+  },
+
+  _nextSpawnCap() {
+    const highest = this._highestBoardValue();
+    return Math.max(4, highest / 4);
+  },
+
+  _rollNextValue() {
+    return rand(this._nextSpawnCap());
+  },
+
   _startCurrentFall() {
     this._stopCurrentFall();
     if (this._busy || this._state?.status !== 'playing' || !this._state.current) return;
@@ -862,7 +900,7 @@ const DropMerge = {
   },
 
   _onPointerDown(event) {
-    if (this._state?.status !== 'playing' || this._busy || !this._state.current) return;
+    if (this._state?.status !== 'playing') return;
     if (this._pointerId !== null) return;
 
     this._pointerId = event.pointerId;
@@ -874,7 +912,7 @@ const DropMerge = {
   },
 
   _onPointerMove(event) {
-    if (event.pointerId !== this._pointerId || !this._aiming || !this._state.current) return;
+    if (event.pointerId !== this._pointerId || !this._aiming) return;
     this._moveCurrentToX(event.clientX);
     event.preventDefault();
   },
@@ -884,20 +922,20 @@ const DropMerge = {
     this._stage?.releasePointerCapture?.(event.pointerId);
     this._pointerId = null;
     this._aiming = false;
-    this._updatePreview();
+    if (this._state.current) this._updatePreview();
     event.preventDefault();
-    this._dropCurrent();
+    if (this._state.current && !this._busy) this._dropCurrent();
   },
 
   _onPointerCancel(event) {
     if (event.pointerId !== this._pointerId) return;
     this._pointerId = null;
     this._aiming = false;
-    this._updatePreview();
+    if (this._state.current) this._updatePreview();
   },
 
   _moveCurrentToX(clientX) {
-    if (!this._state.current || !this._stage) return;
+    if (!this._stage) return;
     const rect = this._stage.getBoundingClientRect();
     const localX = clamp(clientX - rect.left, 0, rect.width - 1);
     const col = clamp(
@@ -905,12 +943,14 @@ const DropMerge = {
       0,
       COLS - 1,
     );
-    if (this._state.current.col !== col) {
-      this._state.current.col = col;
-      this._clampCurrentRow();
-      try { navigator.vibrate?.(6); } catch {}
-      this._updatePreview();
-    }
+    const changed = this._heldCol !== col;
+    this._heldCol = col;
+    if (!this._state.current) return;
+    if (this._state.current.col === col) return;
+    this._state.current.col = col;
+    this._clampCurrentRow();
+    if (changed) try { navigator.vibrate?.(6); } catch {}
+    this._updatePreview();
   },
 
   _stepCurrent(delta) {
@@ -918,6 +958,7 @@ const DropMerge = {
     const nextCol = clamp(this._state.current.col + delta, 0, COLS - 1);
     if (nextCol === this._state.current.col) return;
     this._state.current.col = nextCol;
+    this._heldCol = nextCol;
     this._clampCurrentRow();
     this._updatePreview();
     try { navigator.vibrate?.(6); } catch {}
@@ -940,7 +981,8 @@ const DropMerge = {
     const x = this._xForCol(current.col);
     const y = this._yForRow(current.row);
 
-    this._previewEl.style.transition = '';
+    this._previewEl.style.transition = this._aiming ? 'none' : '';
+    this._beamEl.style.transition = this._aiming ? 'none' : '';
     this._previewEl.classList.remove('hidden', 'shake');
     this._previewEl.classList.toggle('aiming', this._aiming);
     this._previewEl.classList.toggle('invalid', !valid);
@@ -1034,7 +1076,8 @@ const DropMerge = {
       return true;
     }
 
-    const spawnCol = this._pickSpawnColumn(this._state.lastCol);
+    const spawnPreferredCol = this._pointerId !== null ? this._heldCol : this._state.lastCol;
+    const spawnCol = this._pickSpawnColumn(spawnPreferredCol);
     if (spawnCol == null) {
       this._over();
       return true;
@@ -1046,7 +1089,8 @@ const DropMerge = {
       col: spawnCol,
       row: spawnLandingRow === -1 ? 0 : Math.min(SPAWN_ROW, spawnLandingRow),
     };
-    this._state.next = rand();
+    this._heldCol = spawnCol;
+    this._state.next = this._rollNextValue();
     this._busy = false;
     this._updateHeader();
     this._updatePreview(true);
